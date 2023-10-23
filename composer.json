@@ -1,0 +1,5 @@
+{
+  "require": {
+    "simplehtmldom/simplehtmldom": "1.9.1"
+  }
+}
