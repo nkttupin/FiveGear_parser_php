@@ -22,7 +22,7 @@
             </div>
 
         </div>
-        <div id="jsonDisplay"></div>
+        <div  class="fs-6" id="jsonDisplay"></div>
 
 
     </div>
