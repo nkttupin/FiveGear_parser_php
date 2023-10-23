@@ -1,211 +1,50 @@
-<?php
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Каталоги 5-ая передача</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+</head>
+<body>
+<main>
 
 
-$fivegear = new Fivegear();
-// Вызов метода класса
-$response = $fivegear->get('AmD');
+    <div class="px-4 pt-5 my-5 text-center border-bottom">
+        <h1 class="display-4 fw-bold text-body-emphasis">Каталоги 5-ая передача</h1>
+        <div class="col-lg-6 mx-auto">
+            <p class="lead mb-4">вводи название категории и поехали</p>
+            <div class="d-grid gap-2 d-sm-flex justify-content-sm-center mb-5">
+                <form action="FiveGear.php" method="POST" id="myForm">
+                    <input type="text" name="directory_name" placeholder="Название каталога" required>
+                    <input type="button" id="submitBtn" value="Запустить скрипт">
+                </form>
+            </div>
 
-echo $response;
+        </div>
 
-class Fivegear
-{
-    private $baseUrl = 'https://xn--80aaaoea1ebkq6dxec.xn--p1ai';
+    </div>
+</main>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script>
+    $(document).ready(function(){
+        $("#submitBtn").click(function(){
+            var brandName = $("input[name=directory_name]").val();
 
-    public function get($brandName)
-    {
-        try {
-            $output = [
-                "status" => null,
-                "result" => null
-            ];
-
-            $catalog = $this->get_catalog();
-            foreach ($catalog as $brand) {
-                if (strtolower($brand['name']) !== strtolower($brandName)) continue;
-
-                $output["status"] = 200;
-                $output["result"] = $this->parse_brand($brand);
-                break;
-            }
-
-            // Возвращаем 404 статус, если бренд не найден
-            if ($output["status"] === null) {
-                $output["status"] = 404;
-                $output["result"] = "Brand not found: " . $brandName;
-            }
-        } catch (Exception $e) {
-            $output["status"] = 500;
-            $output["result"] = "Server error: " . $e->getMessage();
-        }
-
-        header('Content-Type: application/json; charset=utf-8');
-        return json_encode($output, JSON_UNESCAPED_UNICODE);
-    }
-
-    private function parse_brand($brand)
-    {
-        $brandInfo = array();
-        $brandUrl = $this->baseUrl . $brand['link'];
-
-        $dom = $this->get_html($brandUrl);
-
-        $brandInfo['id'] = $brand['id'];
-        $brandInfo['brand'] = $this->get_brandName($dom);
-        $brandInfo['description'] = $this->get_description($dom);
-        $brandInfo['brand_logo'] = $this->getImageByClass($dom, 'manufacturer-logo-and-name-block text-center');
-        $brandInfo['brand_sample'] = $this->getImageByClass($dom, 'manufacturer-sample-photo text-center');
-        $brandInfo['info'] = $this->get_info($dom);
-
-        return $brandInfo;
-
-    }
-
-    private function get_catalog()
-    {
-        $brands = array();
-        $id = 1;
-        $dom = $this->get_html();
-
-        $divElements = $dom->getElementsByTagName('div');
-
-        foreach ($divElements as $divElement) {
-            // Проверяем, содержит ли элемент класс 'col-12 col-sm-6 col-md-4 col-lg-3 mfr-link-cell'
-            if ($divElement->getAttribute('class') === 'col-12 col-sm-6 col-md-4 col-lg-3 mfr-link-cell') {
-                $aElement = $divElement->getElementsByTagName('a')->item(0); // Получаем первый элемент <a> внутри div
-
-                $catalogName = $aElement->textContent; // Название каталога
-                $catalogLink = $aElement->getAttribute('href'); // Ссылка на каталог
-
-                $brands[] = array(
-                    'id' => $id,
-                    'name' => $catalogName,
-                    'link' => $catalogLink
-                );
-                $id++;
-            }
-        }
-        return $brands;
-    }
-
-    private function get_html($url = null)
-    {
-        $ch = curl_init();
-
-        // Установка URL
-        $url = isset($url) ? $url : $this->baseUrl . '/manufacturers';
-        curl_setopt($ch, CURLOPT_URL, $url);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        curl_setopt($ch, CURLOPT_HEADER, true);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Access-Control-Allow-Origin: *',
-            'Access-Control-Allow-Methods: GET, POST, OPTIONS',
-            'Access-Control-Allow-Headers: Origin, Content-Type, Accept',
-        ]);
-
-        $output = curl_exec($ch); // $output содержит полученную строку
-
-        if ($output === false) {
-            throw new Exception('cURL error: ' . curl_error($ch));
-        }
-
-        curl_close($ch);
-
-        $dom = new DOMDocument();
-        libxml_use_internal_errors(true);
-        $dom->loadHTML($output);
-        libxml_use_internal_errors(false);
-
-        return $dom;
-    }
-
-    private function get_brandName($dom)
-    {
-        return $this->get_innerHTMLByTag($dom, 'h1', 0);
-    }
-    private function getImageByClass($dom, $className) {
-        $divs = $dom->getElementsByTagName('div');
-
-        foreach($divs as $div) {
-            if($div->getAttribute('class') !== $className ) continue;
-
-            $imgTag = $div->getElementsByTagName('img')->item(0);
-            if (!isset($imgTag)) continue;
-
-            $imageUrl = $imgTag->getAttribute('src');
-            return $this->baseUrl . $imageUrl;
-        }
-
-        return null;
-    }
-
-    private function get_description($dom) {
-        $descriptionDivs = $dom->getElementsByTagName('div');
-
-        foreach($descriptionDivs as $div) {
-            if($div->getAttribute('class') === 'manufacturer-info-description') {
-                return $this->get_innerHTMLByTag($div, 'p', 0);
-            }
-        }
-
-        return null;
-    }
-
-    private function get_innerHTMLByTag($domElement, $tagName, $index) {
-        $elements = $domElement->getElementsByTagName($tagName);
-
-        if($elements->length > $index) {
-            return $elements->item($index)->textContent;
-        }
-
-        return null;
-    }
-
-    private function get_info($dom) {
-        $info = array();
-        $section  = $dom->getElementsByTagName('section')->item(0);
-
-        if($section) {
-            $rows = $section->getElementsByTagName('div'); // Получаем все элементы div внутри секции
-
-            $name = "";
-            foreach ($rows as $row) {
-                if ($row->getAttribute('class') === 'mfr-prop-name col-12 col-sm-6') {
-                    $name = $row->textContent;
-                    $name = trim($name);
-                } elseif ($row->getAttribute('class') === 'mfr-prop-value col-12 col-sm-6') {
-                    $value = $row->textContent;
-                    if ($name === 'Страна происхождения:') {
-                        $info['Страна происхождения'] = $value;
-                    } elseif ($name === 'Наша оценка качества:') {
-                        $info['Наша оценка качества'] = $value;
-                    } elseif ($name === 'Конвейерный поставщик:') {
-                        $info['Конвейерный поставщик'] = $value;
-                    } elseif ($name === 'Специализация производителя:') {
-                        $info['Специализация производителя'] = $value;
-                    } elseif ($name === 'Способ производства:') {
-                        $info['Способ производства'] = $value;
-                    } elseif ($name === 'Эта компания - автопроизводитель:') {
-                        $info['Эта компания - автопроизводитель'] = $value;
-                    }
-
-                } elseif ($row->getAttribute('class') === 'mfr-prop-value col-12 col-sm-6 links-cell') {
-                    if ($name === 'Ссылки на официальные сайты:'){
-                        $links = $row->getElementsByTagName('a');
-                        $urls = array();
-                        foreach ($links as $link) {
-                            $url = $link->getAttribute('href');
-                            $urls[] = $url;
-                        }
-                        $info['Ссылки на официальные сайты'] = $urls;
-                    }
+            $.ajax({
+                type: "POST",
+                url: "FiveGear.php",
+                data: { directory_name: brandName },
+                success: function(response){
+                    console.log(response);
+                },
+                error: function(request, status, error){
+                    console.log("Error: " + error);
                 }
-            }
-
-        }
-
-        return $info;
-    }
-
-}
-
-?>
+            });
+        });
+    });
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+</body>
+</html>
