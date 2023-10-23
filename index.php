@@ -3,8 +3,9 @@
 
 $fivegear = new Fivegear();
 // Вызов метода класса
-$json = $fivegear->get('AmD');
-echo $json;
+$response = $fivegear->get('AmD');
+
+echo $response;
 
 class Fivegear
 {
@@ -12,19 +13,33 @@ class Fivegear
 
     public function get($brandName)
     {
-        $brandInfo = array();
+        try {
+            $output = [
+                "status" => null,
+                "result" => null
+            ];
 
-        $catalog = ($this->get_catalog());
-        foreach ($catalog as $brand) {
-            if (strtolower($brand['name']) === strtolower($brandName)) {
+            $catalog = $this->get_catalog();
+            foreach ($catalog as $brand) {
+                if (strtolower($brand['name']) !== strtolower($brandName)) continue;
 
-                $brandInfo = ($this->parse_brand($brand));
+                $output["status"] = 200;
+                $output["result"] = $this->parse_brand($brand);
                 break;
             }
-        }
-        header('Content-Type: application/json; charset=utf-8');
 
-        return json_encode($brandInfo, JSON_UNESCAPED_UNICODE);
+            // Возвращаем 404 статус, если бренд не найден
+            if ($output["status"] === null) {
+                $output["status"] = 404;
+                $output["result"] = "Brand not found: " . $brandName;
+            }
+        } catch (Exception $e) {
+            $output["status"] = 500;
+            $output["result"] = "Server error: " . $e->getMessage();
+        }
+
+        header('Content-Type: application/json; charset=utf-8');
+        return json_encode($output, JSON_UNESCAPED_UNICODE);
     }
 
     private function parse_brand($brand)
@@ -37,29 +52,9 @@ class Fivegear
         $brandInfo['id'] = $brand['id'];
         $brandInfo['brand'] = $this->get_brandName($dom);
         $brandInfo['description'] = $this->get_description($dom);
-        $brandInfo['brand_logo'] = $this->get_imageLogo($dom);
-        $brandInfo['brand_sample'] = $this->get_imageSample($dom, 0);
+        $brandInfo['brand_logo'] = $this->getImageByClass($dom, 'manufacturer-logo-and-name-block text-center');
+        $brandInfo['brand_sample'] = $this->getImageByClass($dom, 'manufacturer-sample-photo text-center');
         $brandInfo['info'] = $this->get_info($dom);
-
-
-        //Переписапть
-        /*
-        $logoImg = $dom->getElementsByTagName('img');
-        if ($logoImg->length > 0) {
-            $imageUrl = $logoImg[0]->getAttribute('src');
-            $fullImageUrl = $this->baseUrl . $imageUrl;
-            $brandInfo['brand_logo'] = $fullImageUrl;
-        }
-        $sampleImg = $dom->getElementsByTagName('img');
-        if ($sampleImg->length > 0) {
-            $sampleImageUrl = $sampleImg[0]->getAttribute('src');
-            $fullSampleImageUrl = $this->baseUrl . $sampleImageUrl;
-            $brandInfo['brand_sample'] = $fullSampleImageUrl;
-        }
-        */
-
-
-
 
         return $brandInfo;
 
@@ -110,7 +105,7 @@ class Fivegear
         $output = curl_exec($ch); // $output содержит полученную строку
 
         if ($output === false) {
-            echo 'Ошибка выполнения запроса cURL: ' . curl_error($ch);
+            throw new Exception('cURL error: ' . curl_error($ch));
         }
 
         curl_close($ch);
@@ -127,33 +122,19 @@ class Fivegear
     {
         return $this->get_innerHTMLByTag($dom, 'h1', 0);
     }
+    private function getImageByClass($dom, $className) {
+        $divs = $dom->getElementsByTagName('div');
 
-    private function get_imageLogo($dom)
-    {
-        $imgDivs = $dom->getElementsByTagName('div');
-        foreach ($imgDivs as $div) {
-            if ($div->getAttribute('class') === 'manufacturer-logo-and-name-block text-center') {
-                $imgTag = $div->getElementsByTagName('img')->item(0);
-                if ($imgTag) {
-                    $imageUrl = $imgTag->getAttribute('src');
-                    return  $this->baseUrl . $imageUrl;
-                }
-            }
+        foreach($divs as $div) {
+            if($div->getAttribute('class') !== $className ) continue;
+
+            $imgTag = $div->getElementsByTagName('img')->item(0);
+            if (!isset($imgTag)) continue;
+
+            $imageUrl = $imgTag->getAttribute('src');
+            return $this->baseUrl . $imageUrl;
         }
-        return null;
-    }
-    private function get_imageSample($dom)
-    {
-        $imgDivs = $dom->getElementsByTagName('div');
-        foreach ($imgDivs as $div) {
-            if ($div->getAttribute('class') === 'manufacturer-sample-photo text-center') {
-                $imgTag = $div->getElementsByTagName('img')->item(0);
-                if ($imgTag) {
-                    $imageUrl = $imgTag->getAttribute('src');
-                    return  $this->baseUrl . $imageUrl;
-                }
-            }
-        }
+
         return null;
     }
 
@@ -179,15 +160,6 @@ class Fivegear
         return null;
     }
 
-    private function get_attributeByTag($domElement, $tagName, $index, $attribute) {
-        $elements = $domElement->getElementsByTagName($tagName);
-
-        if($elements->length > $index) {
-            return $elements->item($index)->getAttribute($attribute);
-        }
-
-        return null;
-    }
     private function get_info($dom) {
         $info = array();
         $section  = $dom->getElementsByTagName('section')->item(0);
