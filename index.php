@@ -32,32 +32,18 @@ class Fivegear
         $brandInfo = array();
         $brandUrl = $this->baseUrl . $brand['link'];
 
-        $Info = $this->get_html($brandUrl);
+        $dom = $this->get_html($brandUrl);
 
         $brandInfo['id'] = $brand['id'];
+        $brandInfo['brand'] = $this->get_brandName($dom);
+        $brandInfo['description'] = $this->get_description($dom);
+        $brandInfo['brand_logo'] = $this->get_imageLogo($dom);
+        $brandInfo['brand_sample'] = $this->get_imageSample($dom, 0);
+        $brandInfo['info'] = $this->get_info($dom);
 
-        $dom = new DOMDocument();
-        libxml_use_internal_errors(true); // Включаем внутренний обработчик ошибок libxml
-        $dom->loadHTML($Info);
-        libxml_use_internal_errors(false); // Выключаем внутренний обработчик ошибок libxml
 
-        $h1 = $dom->getElementsByTagName('h1');
-        if ($h1->length > 0) {
-            $brandInfo['brand'] = $h1[0]->textContent;
-        }
-        // Получение описания
-        $description = $dom->getElementsByTagName('div');
-        foreach ($description as $div) {
-            $classAttribute = $div->getAttribute('class');
-            if ($classAttribute === 'manufacturer-info-description') {
-                $p = $div->getElementsByTagName('p');
-                if ($p->length > 0) {
-                    $brandInfo['description'] = $p[0]->textContent;
-                    break;
-                }
-            }
-        }
         //Переписапть
+        /*
         $logoImg = $dom->getElementsByTagName('img');
         if ($logoImg->length > 0) {
             $imageUrl = $logoImg[0]->getAttribute('src');
@@ -70,50 +56,9 @@ class Fivegear
             $fullSampleImageUrl = $this->baseUrl . $sampleImageUrl;
             $brandInfo['brand_sample'] = $fullSampleImageUrl;
         }
-        $info = array();
+        */
 
-        $table = $dom->getElementsByTagName('section')->item(0); // Находим первый элемент section
 
-        if ($table) {
-            $rows = $table->getElementsByTagName('div'); // Получаем все элементы div внутри секции
-
-            $name = "";
-            foreach ($rows as $row) {
-                if ($row->getAttribute('class') === 'mfr-prop-name col-12 col-sm-6') {
-                    $name = $row->textContent;
-                    $name = trim($name);
-                } elseif ($row->getAttribute('class') === 'mfr-prop-value col-12 col-sm-6') {
-                    $value = $row->textContent;
-                    if ($name === 'Страна происхождения:') {
-                        $info['Страна происхождения'] = $value;
-                    } elseif ($name === 'Наша оценка качества:') {
-                        $info['Наша оценка качества'] = $value;
-                    } elseif ($name === 'Конвейерный поставщик:') {
-                        $info['Конвейерный поставщик'] = $value;
-                    } elseif ($name === 'Специализация производителя:') {
-                        $info['Специализация производителя'] = $value;
-                    } elseif ($name === 'Способ производства:') {
-                        $info['Способ производства'] = $value;
-                    } elseif ($name === 'Эта компания - автопроизводитель:') {
-                        $info['Эта компания - автопроизводитель'] = $value;
-                    }
-
-                } elseif ($row->getAttribute('class') === 'mfr-prop-value col-12 col-sm-6 links-cell') {
-                if ($name === 'Ссылки на официальные сайты:'){
-                    $links = $row->getElementsByTagName('a');
-                    $urls = array();
-                    foreach ($links as $link) {
-                        $url = $link->getAttribute('href');
-                        $urls[] = $url;
-                    }
-                    $info['Ссылки на официальные сайты'] = $urls;
-                }
-                }
-            }
-
-        }
-
-        $brandInfo['info'] = $info;
 
 
         return $brandInfo;
@@ -124,13 +69,7 @@ class Fivegear
     {
         $brands = array();
         $id = 1;
-
-        $response = $this->get_html(); // вызов метода curl_init()
-
-        $dom = new DOMDocument();
-        libxml_use_internal_errors(true); // Включаем внутренний обработчик ошибок libxml
-        $dom->loadHTML($response);
-        libxml_use_internal_errors(false); // Выключаем внутренний обработчик ошибок libxml
+        $dom = $this->get_html();
 
         $divElements = $dom->getElementsByTagName('div');
 
@@ -160,9 +99,7 @@ class Fivegear
         // Установка URL
         $url = isset($url) ? $url : $this->baseUrl . '/manufacturers';
         curl_setopt($ch, CURLOPT_URL, $url);
-        // Установка CURLOPT_RETURNTRANSFER (вернуть ответ в виде строки)
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-        // Установка заголовков CORS
         curl_setopt($ch, CURLOPT_HEADER, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Access-Control-Allow-Origin: *',
@@ -170,19 +107,133 @@ class Fivegear
             'Access-Control-Allow-Headers: Origin, Content-Type, Accept',
         ]);
 
-        // Выполнение запроса cURL
         $output = curl_exec($ch); // $output содержит полученную строку
 
-        // Проверка на ошибки
         if ($output === false) {
             echo 'Ошибка выполнения запроса cURL: ' . curl_error($ch);
         }
 
-        // закрытие сеанса curl для освобождения ресурсов
         curl_close($ch);
 
-        return $output;
+        $dom = new DOMDocument();
+        libxml_use_internal_errors(true);
+        $dom->loadHTML($output);
+        libxml_use_internal_errors(false);
+
+        return $dom;
     }
+
+    private function get_brandName($dom)
+    {
+        return $this->get_innerHTMLByTag($dom, 'h1', 0);
+    }
+
+    private function get_imageLogo($dom)
+    {
+        $imgDivs = $dom->getElementsByTagName('div');
+        foreach ($imgDivs as $div) {
+            if ($div->getAttribute('class') === 'manufacturer-logo-and-name-block text-center') {
+                $imgTag = $div->getElementsByTagName('img')->item(0);
+                if ($imgTag) {
+                    $imageUrl = $imgTag->getAttribute('src');
+                    return  $this->baseUrl . $imageUrl;
+                }
+            }
+        }
+        return null;
+    }
+    private function get_imageSample($dom)
+    {
+        $imgDivs = $dom->getElementsByTagName('div');
+        foreach ($imgDivs as $div) {
+            if ($div->getAttribute('class') === 'manufacturer-sample-photo text-center') {
+                $imgTag = $div->getElementsByTagName('img')->item(0);
+                if ($imgTag) {
+                    $imageUrl = $imgTag->getAttribute('src');
+                    return  $this->baseUrl . $imageUrl;
+                }
+            }
+        }
+        return null;
+    }
+
+    private function get_description($dom) {
+        $descriptionDivs = $dom->getElementsByTagName('div');
+
+        foreach($descriptionDivs as $div) {
+            if($div->getAttribute('class') === 'manufacturer-info-description') {
+                return $this->get_innerHTMLByTag($div, 'p', 0);
+            }
+        }
+
+        return null;
+    }
+
+    private function get_innerHTMLByTag($domElement, $tagName, $index) {
+        $elements = $domElement->getElementsByTagName($tagName);
+
+        if($elements->length > $index) {
+            return $elements->item($index)->textContent;
+        }
+
+        return null;
+    }
+
+    private function get_attributeByTag($domElement, $tagName, $index, $attribute) {
+        $elements = $domElement->getElementsByTagName($tagName);
+
+        if($elements->length > $index) {
+            return $elements->item($index)->getAttribute($attribute);
+        }
+
+        return null;
+    }
+    private function get_info($dom) {
+        $info = array();
+        $section  = $dom->getElementsByTagName('section')->item(0);
+
+        if($section) {
+            $rows = $section->getElementsByTagName('div'); // Получаем все элементы div внутри секции
+
+            $name = "";
+            foreach ($rows as $row) {
+                if ($row->getAttribute('class') === 'mfr-prop-name col-12 col-sm-6') {
+                    $name = $row->textContent;
+                    $name = trim($name);
+                } elseif ($row->getAttribute('class') === 'mfr-prop-value col-12 col-sm-6') {
+                    $value = $row->textContent;
+                    if ($name === 'Страна происхождения:') {
+                        $info['Страна происхождения'] = $value;
+                    } elseif ($name === 'Наша оценка качества:') {
+                        $info['Наша оценка качества'] = $value;
+                    } elseif ($name === 'Конвейерный поставщик:') {
+                        $info['Конвейерный поставщик'] = $value;
+                    } elseif ($name === 'Специализация производителя:') {
+                        $info['Специализация производителя'] = $value;
+                    } elseif ($name === 'Способ производства:') {
+                        $info['Способ производства'] = $value;
+                    } elseif ($name === 'Эта компания - автопроизводитель:') {
+                        $info['Эта компания - автопроизводитель'] = $value;
+                    }
+
+                } elseif ($row->getAttribute('class') === 'mfr-prop-value col-12 col-sm-6 links-cell') {
+                    if ($name === 'Ссылки на официальные сайты:'){
+                        $links = $row->getElementsByTagName('a');
+                        $urls = array();
+                        foreach ($links as $link) {
+                            $url = $link->getAttribute('href');
+                            $urls[] = $url;
+                        }
+                        $info['Ссылки на официальные сайты'] = $urls;
+                    }
+                }
+            }
+
+        }
+
+        return $info;
+    }
+
 }
 
 ?>
